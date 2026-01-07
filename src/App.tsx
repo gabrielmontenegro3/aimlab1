@@ -26,8 +26,7 @@ function App() {
   // AK Spray mode
   const [akSprayPattern, setAkSprayPattern] = useState<{ x: number; y: number }[]>([])
   const [currentSprayIndex, setCurrentSprayIndex] = useState(0)
-  const [isSpraying, setIsSpraying] = useState(false)
-  const sprayStartPos = useRef({ x: 0, y: 0 })
+  const [_isSpraying, setIsSpraying] = useState(false)
   const mousePos = useRef({ x: 0, y: 0 })
 
   // Configurar área de jogo
@@ -445,7 +444,7 @@ function App() {
                 <svg className="spray-pattern-line" style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', pointerEvents: 'none', zIndex: 1 }}>
                   {akSprayPattern.length > 0 && (
                     <polyline
-                      points={akSprayPattern.map((p, i) => `${p.x},${p.y}`).join(' ')}
+                      points={akSprayPattern.map((p) => `${p.x},${p.y}`).join(' ')}
                       fill="none"
                       stroke="rgba(255, 215, 0, 0.3)"
                       strokeWidth="2"
