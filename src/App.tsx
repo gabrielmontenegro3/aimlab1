@@ -40,8 +40,8 @@ function App() {
   // Reflexo mode
   const [reactionTimes, setReactionTimes] = useState<number[]>([])
   const [averageReactionTime, setAverageReactionTime] = useState(0)
-  const targetSpawnTimeoutRef = useRef<NodeJS.Timeout | null>(null)
-  const targetDisappearTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const targetSpawnTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const targetDisappearTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const targetSpawnTimeRef = useRef<number>(0)
 
   // Configurar área de jogo
