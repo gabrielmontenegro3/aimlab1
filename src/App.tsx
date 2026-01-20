@@ -29,6 +29,7 @@ function App() {
   const [clicksToDestroy, setClicksToDestroy] = useState(1) // Quantos cliques para eliminar um alvo
   const [targetClicks, setTargetClicks] = useState<Map<number, number>>(new Map()) // Rastrear cliques por alvo
   const [spawnSpeed, setSpawnSpeed] = useState<'lento' | 'normal' | 'rapido' | 'muito-rapido'>('normal')
+  const [normalModoLinha, setNormalModoLinha] = useState(false) // Modo linha no treino normal
   const [maxTargets, setMaxTargets] = useState(1)
   const [cursorTrailEnabled, setCursorTrailEnabled] = useState(false)
   const [cursorTrail, setCursorTrail] = useState<Array<{ x: number; y: number; timestamp: number }>>([])
@@ -217,7 +218,7 @@ function App() {
     if (!gameStarted || gameArea.width === 0 || gameArea.height === 0) return
     if (gameMode === 'ak-spray' || gameMode === 'reflexo') return
 
-    if (gameMode === 'horizontal') {
+    if (gameMode === 'horizontal' || (gameMode === 'normal' && normalModoLinha)) {
       // Modo horizontal: spawnar alvos em uma linha horizontal centralizada dentro da área configurada
       const size = getTargetSize()
       const spawnArea = getSpawnArea()
@@ -229,68 +230,104 @@ function App() {
       
       if (availableWidth <= 0) return
       
-      // Calcular espaçamento mínimo entre alvos (tamanho do alvo + padding)
-      const minSpacing = size + padding * 2
-      const currentTargetCount = targets.length
-      
-      // Calcular espaçamento baseado no número máximo de alvos e garantir espaçamento mínimo
-      const maxPossibleTargets = Math.floor(availableWidth / minSpacing)
-      const effectiveMaxTargets = Math.min(maxTargets, maxPossibleTargets)
-      
-      if (currentTargetCount >= effectiveMaxTargets) return
-      
-      // Encontrar uma posição aleatória que respeite o espaçamento mínimo
       let x: number
-      let attempts = 0
-      const maxAttempts = 50
       
-      do {
-        // Gerar posição aleatória dentro da área disponível
-        const randomX = spawnArea.offsetX + padding + Math.random() * availableWidth
-        x = randomX - size / 2
+      // Para modo horizontal (não normal), manter espaçamento e lógica original
+      if (gameMode === 'horizontal') {
+        const minSpacing = size + padding * 2
+        const currentTargetCount = targets.length
+        const maxPossibleTargets = Math.floor(availableWidth / minSpacing)
+        const effectiveMaxTargets = Math.min(maxTargets, maxPossibleTargets)
         
-        // Garantir que não saia dos limites da área de spawn
-        x = Math.max(spawnArea.offsetX + padding, Math.min(x, spawnArea.offsetX + spawnArea.width - padding - size))
+        if (currentTargetCount >= effectiveMaxTargets) return
         
-        // Verificar se não está muito próximo de outros alvos
-        if (targets.length > 0) {
-          const newCenterX = x + size / 2
-          const tooClose = targets.some(target => {
-            const targetCenterX = target.x + target.size / 2
-            const distance = Math.abs(targetCenterX - newCenterX)
-            return distance < minSpacing
-          })
+        let attempts = 0
+        const maxAttempts = 50
+        
+        do {
+          const randomX = spawnArea.offsetX + padding + Math.random() * availableWidth
+          x = randomX - size / 2
+          x = Math.max(spawnArea.offsetX + padding, Math.min(x, spawnArea.offsetX + spawnArea.width - padding - size))
           
-          if (!tooClose) {
-            break // Posição válida encontrada
+          if (targets.length > 0) {
+            const newCenterX = x + size / 2
+            const tooClose = targets.some(target => {
+              const targetCenterX = target.x + target.size / 2
+              const distance = Math.abs(targetCenterX - newCenterX)
+              return distance < minSpacing
+            })
+            
+            if (!tooClose) {
+              break
+            }
+          } else {
+            break
           }
-        } else {
-          break // Não há alvos existentes, qualquer posição é válida
-        }
-        
-        attempts++
-      } while (attempts < maxAttempts)
-      
-      // Se não encontrou uma posição válida após várias tentativas, usar busca sistemática
-      if (attempts >= maxAttempts && targets.length > 0) {
-        let bestX = spawnArea.offsetX + padding
-        let bestDistance = 0
-        
-        // Testar várias posições para encontrar a melhor
-        for (let testX = spawnArea.offsetX + padding; testX <= spawnArea.offsetX + spawnArea.width - padding - size; testX += 5) {
-          const testCenterX = testX + size / 2
-          const minDistance = Math.min(...targets.map(target => {
-            const targetCenterX = target.x + target.size / 2
-            return Math.abs(targetCenterX - testCenterX)
-          }))
           
-          if (minDistance > bestDistance) {
-            bestDistance = minDistance
-            bestX = testX
-          }
-        }
+          attempts++
+        } while (attempts < maxAttempts)
         
-        x = bestX
+        if (attempts >= maxAttempts && targets.length > 0) {
+          let bestX = spawnArea.offsetX + padding
+          let bestDistance = 0
+          
+          for (let testX = spawnArea.offsetX + padding; testX <= spawnArea.offsetX + spawnArea.width - padding - size; testX += 5) {
+            const testCenterX = testX + size / 2
+            const minDistance = Math.min(...targets.map(target => {
+              const targetCenterX = target.x + target.size / 2
+              return Math.abs(targetCenterX - testCenterX)
+            }))
+            
+            if (minDistance > bestDistance) {
+              bestDistance = minDistance
+              bestX = testX
+            }
+          }
+          
+          x = bestX
+        }
+      } else {
+        // Modo normal com modo linha: spawn aleatório sem sobreposição
+        // Permitir que alvos fiquem bem próximos (até se encostando), mas não sobrepostos
+        let attempts = 0
+        const maxAttempts = 100
+        let foundValidPosition = false
+        
+        do {
+          // Gerar posição totalmente aleatória
+          const randomX = spawnArea.offsetX + padding + Math.random() * availableWidth
+          x = Math.max(spawnArea.offsetX + padding, Math.min(randomX - size / 2, spawnArea.offsetX + spawnArea.width - padding - size))
+          
+          // Verificar se não está sobrepondo outros alvos
+          if (targets.length > 0) {
+            const newLeft = x
+            const newRight = x + size
+            
+            const isOverlapping = targets.some(target => {
+              const targetLeft = target.x
+              const targetRight = target.x + target.size
+              
+              // Verificar sobreposição horizontal
+              // Permite que fiquem encostados (mesma coordenada), mas não sobrepostos
+              return (newLeft < targetRight && newRight > targetLeft)
+            })
+            
+            if (!isOverlapping) {
+              foundValidPosition = true
+              break
+            }
+          } else {
+            foundValidPosition = true
+            break
+          }
+          
+          attempts++
+        } while (attempts < maxAttempts)
+        
+        // Se não encontrou posição válida após muitas tentativas, não spawnar
+        if (!foundValidPosition) {
+          return
+        }
       }
       
       const newTargetId = targetIdCounter
@@ -367,7 +404,7 @@ function App() {
       ])
       setTargetIdCounter((prev) => prev + 1)
     }
-  }, [gameStarted, gameArea, targetIdCounter, getSpawnArea, getTargetSize, gameMode, getGridCells, targets])
+  }, [gameStarted, gameArea, targetIdCounter, getSpawnArea, getTargetSize, gameMode, getGridCells, targets, normalModoLinha])
 
   // Obter intervalo de spawn baseado na velocidade (mais rápido)
   const getSpawnInterval = useCallback(() => {
@@ -403,6 +440,9 @@ function App() {
   // Spawnar alvos periodicamente (modos normal e intensive)
   useEffect(() => {
     if (!gameStarted || gameMode === 'ak-spray' || gameMode === 'reflexo' || gameMode === 'quadrado' || gameMode === 'horizontal') return
+    
+    // No modo normal com modo linha, não usar este intervalo
+    if (gameMode === 'normal' && normalModoLinha) return
 
     const interval = getSpawnInterval()
     const spawnInterval = setInterval(() => {
@@ -417,7 +457,7 @@ function App() {
     }, interval)
 
     return () => clearInterval(spawnInterval)
-  }, [gameStarted, targets.length, spawnTarget, gameMode, maxTargets, getSpawnInterval, lModeTargets])
+  }, [gameStarted, targets.length, spawnTarget, gameMode, maxTargets, getSpawnInterval, lModeTargets, normalModoLinha])
 
   // Limitar alvos quando mudar para modo single no modo L
   useEffect(() => {
@@ -433,6 +473,14 @@ function App() {
       setTargetClicks(new Map())
     }
   }, [gameMode, horizontalModeTargets, targets.length])
+
+  // Limpar alvos quando alternar modo linha no modo normal
+  useEffect(() => {
+    if (gameMode === 'normal' && normalModoLinha) {
+      setTargets([])
+      setTargetClicks(new Map())
+    }
+  }, [normalModoLinha, gameMode])
 
   // Modo Reflexo: Spawn aleatório de alvos
   const spawnReflexoTarget = useCallback(() => {
@@ -548,6 +596,19 @@ function App() {
 
     return () => clearInterval(spawnInterval)
   }, [gameStarted, targets.length, spawnTarget, gameMode, maxTargets, getSpawnInterval, horizontalModeTargets])
+
+  // Spawnar alvos no modo normal com modo linha
+  useEffect(() => {
+    if (!gameStarted || gameMode !== 'normal' || !normalModoLinha) return
+
+    const interval = getSpawnInterval()
+    const spawnInterval = setInterval(() => {
+      if (targets.length >= maxTargets) return
+      spawnTarget()
+    }, interval)
+
+    return () => clearInterval(spawnInterval)
+  }, [gameStarted, targets.length, spawnTarget, gameMode, maxTargets, getSpawnInterval, normalModoLinha])
 
   // Alvos só desaparecem quando acertados (removido timeout automático)
 
@@ -748,7 +809,10 @@ function App() {
           setTargets((prev) => prev.filter((t) => t.id !== targetId))
           setScore((prev) => prev + 10)
           setHits((prev) => prev + 1)
-          spawnTarget()
+          // Não spawnar imediatamente no modo normal com modo linha
+          if (!(gameMode === 'normal' && normalModoLinha)) {
+            spawnTarget()
+          }
         }
       }
     }
@@ -818,6 +882,7 @@ function App() {
     setCurrentSprayIndex(0)
     setMaxTargets(1) // Começar com 1 alvo
     setTargetClicks(new Map()) // Limpar contadores de cliques
+    setNormalModoLinha(false) // Resetar modo linha
     // Resetar estatísticas do modo reflexo
     setReactionTimes([])
     setAverageReactionTime(0)
@@ -845,6 +910,7 @@ function App() {
     setIsSpraying(false)
     setMaxTargets(1) // Resetar para 1 alvo
     setTargetClicks(new Map()) // Limpar contadores de cliques
+    setNormalModoLinha(false) // Resetar modo linha
     // Resetar estatísticas do modo reflexo
     setReactionTimes([])
     setAverageReactionTime(0)
@@ -1018,6 +1084,19 @@ function App() {
                       ))}
                     </div>
                   </div>
+                  {gameMode === 'normal' && (
+                    <div className="target-size-selector">
+                      <span className="area-label">Modo:</span>
+                      <div className="area-buttons">
+                        <button
+                          className={`area-button ${normalModoLinha ? 'active' : ''}`}
+                          onClick={() => setNormalModoLinha(!normalModoLinha)}
+                        >
+                          Modo linha
+                        </button>
+                      </div>
+                    </div>
+                  )}
                   {(gameMode === 'l' || gameMode === 'l-fugitivo') && (
                     <div className="target-size-selector">
                       <span className="area-label">Alvos:</span>
