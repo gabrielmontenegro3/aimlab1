@@ -8,7 +8,7 @@ interface Target {
   size: number
 }
 
-type GameMode = 'dashboard' | 'normal' | 'intensive' | 'ak-spray' | 'reflexo' | 'quadrado' | 'l' | 'l-fugitivo'
+type GameMode = 'dashboard' | 'normal' | 'intensive' | 'ak-spray' | 'reflexo' | 'quadrado' | 'l' | 'l-fugitivo' | 'horizontal'
 
 function App() {
   const [gameMode, setGameMode] = useState<GameMode>('dashboard')
@@ -25,6 +25,9 @@ function App() {
   const [squareSize, setSquareSize] = useState<'medio' | 'pequeno' | 'muito-pequeno' | 'micro'>('medio')
   const [gridSize, setGridSize] = useState(5) // Tamanho da grade (5x5, 6x6, etc)
   const [lModeTargets, setLModeTargets] = useState<'single' | 'multiple'>('multiple') // Modo L: 1 alvo ou múltiplos
+  const [horizontalModeTargets, setHorizontalModeTargets] = useState<'single' | 'multiple'>('multiple') // Modo Horizontal: 1 alvo ou múltiplos
+  const [clicksToDestroy, setClicksToDestroy] = useState(1) // Quantos cliques para eliminar um alvo
+  const [targetClicks, setTargetClicks] = useState<Map<number, number>>(new Map()) // Rastrear cliques por alvo
   const [spawnSpeed, setSpawnSpeed] = useState<'lento' | 'normal' | 'rapido' | 'muito-rapido'>('normal')
   const [maxTargets, setMaxTargets] = useState(1)
   const [cursorTrailEnabled, setCursorTrailEnabled] = useState(false)
@@ -209,12 +212,101 @@ function App() {
     return cells
   }, [gameMode, gameArea, gridSize])
 
-  // Gerar novos alvos (modo normal/intensivo/quadrado/l)
+  // Gerar novos alvos (modo normal/intensivo/quadrado/l/horizontal)
   const spawnTarget = useCallback(() => {
     if (!gameStarted || gameArea.width === 0 || gameArea.height === 0) return
     if (gameMode === 'ak-spray' || gameMode === 'reflexo') return
 
-    if (gameMode === 'quadrado') {
+    if (gameMode === 'horizontal') {
+      // Modo horizontal: spawnar alvos em uma linha horizontal centralizada dentro da área configurada
+      const size = getTargetSize()
+      const spawnArea = getSpawnArea()
+      const padding = 10
+      
+      // Usar a área de spawn configurada
+      const availableWidth = spawnArea.width - padding * 2 - size
+      const centerY = spawnArea.offsetY + spawnArea.height / 2
+      
+      if (availableWidth <= 0) return
+      
+      // Calcular espaçamento mínimo entre alvos (tamanho do alvo + padding)
+      const minSpacing = size + padding * 2
+      const currentTargetCount = targets.length
+      
+      // Calcular espaçamento baseado no número máximo de alvos e garantir espaçamento mínimo
+      const maxPossibleTargets = Math.floor(availableWidth / minSpacing)
+      const effectiveMaxTargets = Math.min(maxTargets, maxPossibleTargets)
+      
+      if (currentTargetCount >= effectiveMaxTargets) return
+      
+      // Encontrar uma posição aleatória que respeite o espaçamento mínimo
+      let x: number
+      let attempts = 0
+      const maxAttempts = 50
+      
+      do {
+        // Gerar posição aleatória dentro da área disponível
+        const randomX = spawnArea.offsetX + padding + Math.random() * availableWidth
+        x = randomX - size / 2
+        
+        // Garantir que não saia dos limites da área de spawn
+        x = Math.max(spawnArea.offsetX + padding, Math.min(x, spawnArea.offsetX + spawnArea.width - padding - size))
+        
+        // Verificar se não está muito próximo de outros alvos
+        if (targets.length > 0) {
+          const newCenterX = x + size / 2
+          const tooClose = targets.some(target => {
+            const targetCenterX = target.x + target.size / 2
+            const distance = Math.abs(targetCenterX - newCenterX)
+            return distance < minSpacing
+          })
+          
+          if (!tooClose) {
+            break // Posição válida encontrada
+          }
+        } else {
+          break // Não há alvos existentes, qualquer posição é válida
+        }
+        
+        attempts++
+      } while (attempts < maxAttempts)
+      
+      // Se não encontrou uma posição válida após várias tentativas, usar busca sistemática
+      if (attempts >= maxAttempts && targets.length > 0) {
+        let bestX = spawnArea.offsetX + padding
+        let bestDistance = 0
+        
+        // Testar várias posições para encontrar a melhor
+        for (let testX = spawnArea.offsetX + padding; testX <= spawnArea.offsetX + spawnArea.width - padding - size; testX += 5) {
+          const testCenterX = testX + size / 2
+          const minDistance = Math.min(...targets.map(target => {
+            const targetCenterX = target.x + target.size / 2
+            return Math.abs(targetCenterX - testCenterX)
+          }))
+          
+          if (minDistance > bestDistance) {
+            bestDistance = minDistance
+            bestX = testX
+          }
+        }
+        
+        x = bestX
+      }
+      
+      const newTargetId = targetIdCounter
+      setTargets((prev) => [
+        ...prev,
+        {
+          id: newTargetId,
+          x,
+          y: centerY - size / 2,
+          size
+        }
+      ])
+      // Inicializar contador de cliques para o novo alvo
+      setTargetClicks((prev) => new Map(prev).set(newTargetId, 0))
+      setTargetIdCounter((prev) => prev + 1)
+    } else if (gameMode === 'quadrado') {
       // Modo quadrado: spawnar dentro dos cubículos da grade
       const cells = getGridCells()
       if (cells.length === 0) return
@@ -310,7 +402,7 @@ function App() {
 
   // Spawnar alvos periodicamente (modos normal e intensive)
   useEffect(() => {
-    if (!gameStarted || gameMode === 'ak-spray' || gameMode === 'reflexo' || gameMode === 'quadrado') return
+    if (!gameStarted || gameMode === 'ak-spray' || gameMode === 'reflexo' || gameMode === 'quadrado' || gameMode === 'horizontal') return
 
     const interval = getSpawnInterval()
     const spawnInterval = setInterval(() => {
@@ -333,6 +425,14 @@ function App() {
       setTargets((prev) => prev.slice(0, 1))
     }
   }, [gameMode, lModeTargets, targets.length])
+
+  // Limitar alvos quando mudar para modo single no modo horizontal
+  useEffect(() => {
+    if (gameMode === 'horizontal' && horizontalModeTargets === 'single' && targets.length > 1) {
+      setTargets((prev) => prev.slice(0, 1))
+      setTargetClicks(new Map())
+    }
+  }, [gameMode, horizontalModeTargets, targets.length])
 
   // Modo Reflexo: Spawn aleatório de alvos
   const spawnReflexoTarget = useCallback(() => {
@@ -434,6 +534,21 @@ function App() {
     }
   }, [gameStarted, targets.length, spawnTarget, gameMode])
 
+  // Spawnar alvos no modo horizontal
+  useEffect(() => {
+    if (!gameStarted || gameMode !== 'horizontal') return
+
+    const interval = getSpawnInterval()
+    const spawnInterval = setInterval(() => {
+      // No modo horizontal, verificar se é single ou multiple
+      if (horizontalModeTargets === 'single' && targets.length >= 1) return
+      if (horizontalModeTargets === 'multiple' && targets.length >= maxTargets) return
+      spawnTarget()
+    }, interval)
+
+    return () => clearInterval(spawnInterval)
+  }, [gameStarted, targets.length, spawnTarget, gameMode, maxTargets, getSpawnInterval, horizontalModeTargets])
+
   // Alvos só desaparecem quando acertados (removido timeout automático)
 
   // Inicializar padrão AK quando entrar no modo
@@ -507,6 +622,39 @@ function App() {
     return () => clearInterval(cleanupInterval)
   }, [cursorTrailEnabled])
 
+  // Reorganizar alvos no modo horizontal
+  const reorganizeHorizontalTargets = useCallback((remainingTargets: Target[]) => {
+    if (gameMode !== 'horizontal' || remainingTargets.length === 0) return remainingTargets
+    
+    const spawnArea = getSpawnArea()
+    const padding = 10
+    const centerY = spawnArea.offsetY + spawnArea.height / 2
+    const maxSize = Math.max(...remainingTargets.map(t => t.size))
+    const availableWidth = spawnArea.width - padding * 2 - maxSize
+    
+    if (availableWidth <= 0) return remainingTargets
+    
+    // Calcular espaçamento mínimo
+    const minSpacing = maxSize + padding * 2
+    const maxPossibleTargets = Math.floor(availableWidth / minSpacing)
+    const effectiveTargetCount = Math.min(remainingTargets.length, maxPossibleTargets)
+    
+    // Calcular espaçamento uniforme
+    const spacing = availableWidth / (effectiveTargetCount + 1)
+    
+    return remainingTargets.map((target, index) => {
+      let x = spawnArea.offsetX + padding + spacing * (index + 1) - target.size / 2
+      // Garantir que não saia dos limites
+      x = Math.max(spawnArea.offsetX + padding, Math.min(x, spawnArea.offsetX + spawnArea.width - padding - target.size))
+      
+      return {
+        ...target,
+        x,
+        y: centerY - target.size / 2
+      }
+    })
+  }, [gameMode, getSpawnArea])
+
   const handleTargetClick = (targetId: number) => {
     if (gameMode === 'ak-spray') {
       // No modo AK, verificar se clicou no alvo correto do padrão
@@ -571,10 +719,37 @@ function App() {
           spawnTarget()
         }, 300)
       } else {
-        setTargets((prev) => prev.filter((t) => t.id !== targetId))
-        setScore((prev) => prev + 10)
-        setHits((prev) => prev + 1)
-        spawnTarget()
+        // Modo horizontal: contar cliques antes de remover
+        if (gameMode === 'horizontal') {
+          const currentClicks = targetClicks.get(targetId) || 0
+          const newClicks = currentClicks + 1
+          
+          if (newClicks >= clicksToDestroy) {
+            // Alvo eliminado
+            setTargets((prev) => {
+              const remaining = prev.filter((t) => t.id !== targetId)
+              return reorganizeHorizontalTargets(remaining)
+            })
+            setTargetClicks((prev) => {
+              const newMap = new Map(prev)
+              newMap.delete(targetId)
+              return newMap
+            })
+            setScore((prev) => prev + 10)
+            setHits((prev) => prev + 1)
+            spawnTarget()
+          } else {
+            // Incrementar contador de cliques
+            setTargetClicks((prev) => new Map(prev).set(targetId, newClicks))
+            setScore((prev) => prev + 1) // Pontos parciais por clique
+          }
+        } else {
+          // Outros modos: remover imediatamente
+          setTargets((prev) => prev.filter((t) => t.id !== targetId))
+          setScore((prev) => prev + 10)
+          setHits((prev) => prev + 1)
+          spawnTarget()
+        }
       }
     }
   }
@@ -642,6 +817,7 @@ function App() {
     setTargetIdCounter(0)
     setCurrentSprayIndex(0)
     setMaxTargets(1) // Começar com 1 alvo
+    setTargetClicks(new Map()) // Limpar contadores de cliques
     // Resetar estatísticas do modo reflexo
     setReactionTimes([])
     setAverageReactionTime(0)
@@ -668,6 +844,7 @@ function App() {
     setCurrentSprayIndex(0)
     setIsSpraying(false)
     setMaxTargets(1) // Resetar para 1 alvo
+    setTargetClicks(new Map()) // Limpar contadores de cliques
     // Resetar estatísticas do modo reflexo
     setReactionTimes([])
     setAverageReactionTime(0)
@@ -753,6 +930,14 @@ function App() {
               <span className="button-title">Modo L Fugitivo</span>
               <span className="button-desc">Alvos em formato de I que fogem quando você erra o clique</span>
             </button>
+            <button
+              className="dashboard-button horizontal"
+              onClick={() => startGame('horizontal')}
+            >
+              <span className="button-icon">➖</span>
+              <span className="button-title">Modo Horizontal</span>
+              <span className="button-desc">Alvos aparecem em uma linha horizontal</span>
+            </button>
           </div>
           {score > 0 && (
             <div className="final-stats">
@@ -778,7 +963,7 @@ function App() {
         <>
           <div className="game-ui">
             <div className="ui-left">
-              {(gameMode === 'normal' || gameMode === 'l' || gameMode === 'l-fugitivo') && (
+              {(gameMode === 'normal' || gameMode === 'l' || gameMode === 'l-fugitivo' || gameMode === 'horizontal') && (
                 <>
                   <div className="area-size-selector">
                     <span className="area-label">Área:</span>
@@ -906,6 +1091,44 @@ function App() {
                           onClick={() => setTargetSize(key as typeof targetSize)}
                         >
                           {label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </>
+              )}
+              {gameMode === 'horizontal' && (
+                <>
+                  <div className="special-mode-info">
+                    <span className="area-label">➖ Modo Horizontal | Alvos em linha</span>
+                  </div>
+                  <div className="target-size-selector">
+                    <span className="area-label">Alvos:</span>
+                    <div className="area-buttons">
+                      <button
+                        className={`area-button ${horizontalModeTargets === 'single' ? 'active' : ''}`}
+                        onClick={() => setHorizontalModeTargets('single')}
+                      >
+                        1 Alvo
+                      </button>
+                      <button
+                        className={`area-button ${horizontalModeTargets === 'multiple' ? 'active' : ''}`}
+                        onClick={() => setHorizontalModeTargets('multiple')}
+                      >
+                        Múltiplos
+                      </button>
+                    </div>
+                  </div>
+                  <div className="target-size-selector">
+                    <span className="area-label">Cliques:</span>
+                    <div className="area-buttons">
+                      {[1, 2, 3, 4, 5].map((clicks) => (
+                        <button
+                          key={clicks}
+                          className={`area-button ${clicksToDestroy === clicks ? 'active' : ''}`}
+                          onClick={() => setClicksToDestroy(clicks)}
+                        >
+                          {clicks}
                         </button>
                       ))}
                     </div>
@@ -1071,7 +1294,7 @@ function App() {
                 ))}
               </div>
             )}
-            {(gameMode === 'intensive' || gameMode === 'reflexo' || ((gameMode === 'normal' || gameMode === 'l' || gameMode === 'l-fugitivo') && areaSize < 100)) && (
+            {(gameMode === 'intensive' || gameMode === 'reflexo' || ((gameMode === 'normal' || gameMode === 'l' || gameMode === 'l-fugitivo' || gameMode === 'horizontal') && areaSize < 100)) && (
               <div
                 className="spawn-area-indicator"
                 style={{
@@ -1109,38 +1332,52 @@ function App() {
                 )}
               </>
             )}
-            {targets.map((target) => (
-              <div
-                key={target.id}
-                className={`target ${gameMode === 'intensive' ? 'special-target' : ''} ${gameMode === 'ak-spray' ? (target.id === currentSprayIndex ? 'ak-target-active' : 'ak-target') : ''} ${gameMode === 'quadrado' ? 'square-target' : ''} ${gameMode === 'l' || gameMode === 'l-fugitivo' ? 'l-target' : ''} ${gameMode === 'l-fugitivo' && hitTargets.has(target.id) ? 'target-hit-animation' : ''}`}
-                style={{
-                  left: `${target.x}px`,
-                  top: `${target.y}px`,
-                  width: `${target.size}px`,
-                  height: `${target.size}px`,
-                  pointerEvents: gameMode === 'ak-spray' && target.id !== currentSprayIndex ? 'none' : (gameMode === 'l' || gameMode === 'l-fugitivo') ? 'none' : 'auto'
-                }}
-                onClick={(gameMode === 'l' || gameMode === 'l-fugitivo') ? undefined : (e) => {
-                  e.stopPropagation()
-                  handleTargetClick(target.id)
-                }}
-              >
-                {(gameMode === 'l' || gameMode === 'l-fugitivo') && (
-                  <span 
-                    className="l-target-text"
-                    style={{
-                      fontSize: `${target.size * 0.8}px`
-                    }}
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      handleTargetClick(target.id)
-                    }}
-                  >
-                    I
-                  </span>
-                )}
-              </div>
-            ))}
+            {targets.map((target) => {
+              const clicks = targetClicks.get(target.id) || 0
+              const clicksRemaining = clicksToDestroy - clicks
+              return (
+                <div
+                  key={target.id}
+                  className={`target ${gameMode === 'intensive' ? 'special-target' : ''} ${gameMode === 'ak-spray' ? (target.id === currentSprayIndex ? 'ak-target-active' : 'ak-target') : ''} ${gameMode === 'quadrado' ? 'square-target' : ''} ${gameMode === 'l' || gameMode === 'l-fugitivo' ? 'l-target' : ''} ${gameMode === 'l-fugitivo' && hitTargets.has(target.id) ? 'target-hit-animation' : ''} ${gameMode === 'horizontal' ? 'horizontal-target' : ''}`}
+                  style={{
+                    left: `${target.x}px`,
+                    top: `${target.y}px`,
+                    width: `${target.size}px`,
+                    height: `${target.size}px`,
+                    pointerEvents: gameMode === 'ak-spray' && target.id !== currentSprayIndex ? 'none' : (gameMode === 'l' || gameMode === 'l-fugitivo') ? 'none' : 'auto'
+                  }}
+                  onClick={(gameMode === 'l' || gameMode === 'l-fugitivo') ? undefined : (e) => {
+                    e.stopPropagation()
+                    handleTargetClick(target.id)
+                  }}
+                >
+                  {(gameMode === 'l' || gameMode === 'l-fugitivo') && (
+                    <span 
+                      className="l-target-text"
+                      style={{
+                        fontSize: `${target.size * 0.8}px`
+                      }}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        handleTargetClick(target.id)
+                      }}
+                    >
+                      I
+                    </span>
+                  )}
+                  {gameMode === 'horizontal' && clicksToDestroy > 1 && (
+                    <span 
+                      className="horizontal-target-clicks"
+                      style={{
+                        fontSize: `${Math.max(target.size * 0.3, 14)}px`
+                      }}
+                    >
+                      {clicksRemaining}
+                    </span>
+                  )}
+                </div>
+              )
+            })}
           </div>
         </>
       )}

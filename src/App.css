@@ -443,6 +443,29 @@
   transform: scale(0.95);
 }
 
+.horizontal-target {
+  position: relative;
+}
+
+.horizontal-target-clicks {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  color: white;
+  font-weight: bold;
+  text-shadow: 
+    2px 2px 4px rgba(0, 0, 0, 0.8),
+    0 0 10px rgba(0, 0, 0, 0.5);
+  pointer-events: none;
+  user-select: none;
+  z-index: 15;
+  font-family: Arial, sans-serif;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
 .special-target {
   background: #ffd700 !important;
   border: 1px solid #ffed4e !important;
@@ -604,6 +627,15 @@
 .dashboard-button.l-mode:hover {
   border-color: #9664c8;
   background: rgba(150, 100, 200, 0.2);
+}
+
+.dashboard-button.horizontal {
+  border-color: rgba(100, 200, 150, 0.5);
+}
+
+.dashboard-button.horizontal:hover {
+  border-color: #64c896;
+  background: rgba(100, 200, 150, 0.2);
 }
 
 .button-icon {
