@@ -8,7 +8,7 @@ interface Target {
   size: number
 }
 
-type GameMode = 'dashboard' | 'normal' | 'intensive' | 'ak-spray' | 'reflexo' | 'quadrado' | 'l' | 'l-fugitivo' | 'horizontal'
+type GameMode = 'dashboard' | 'normal' | 'flick' | 'linha-maxima' | 'linhaaaaaaaa' | 'intensive' | 'ak-spray' | 'reflexo' | 'quadrado' | 'l' | 'l-fugitivo' | 'horizontal'
 
 function App() {
   const [gameMode, setGameMode] = useState<GameMode>('dashboard')
@@ -21,7 +21,7 @@ function App() {
   const [targetIdCounter, setTargetIdCounter] = useState(0)
   const [gameArea, setGameArea] = useState({ width: 0, height: 0 })
   const [areaSize, setAreaSize] = useState(100)
-  const [targetSize, setTargetSize] = useState<'grande' | 'medio' | 'pequeno' | 'muito-pequeno' | 'micro'>('grande')
+  const [targetSize, setTargetSize] = useState<'grande' | 'medio' | 'pequeno' | 'muito-pequeno' | 'micro' | 'intensivo' | 'extremo'>('grande')
   const [squareSize, setSquareSize] = useState<'medio' | 'pequeno' | 'muito-pequeno' | 'micro'>('medio')
   const [gridSize, setGridSize] = useState(5) // Tamanho da grade (5x5, 6x6, etc)
   const [lModeTargets, setLModeTargets] = useState<'single' | 'multiple'>('multiple') // Modo L: 1 alvo ou múltiplos
@@ -34,6 +34,14 @@ function App() {
   const [cursorTrailEnabled, setCursorTrailEnabled] = useState(false)
   const [cursorTrail, setCursorTrail] = useState<Array<{ x: number; y: number; timestamp: number }>>([])
   const [hitTargets, setHitTargets] = useState<Set<number>>(new Set()) // Para animação de acerto no modo l-fugitivo
+  const [cursorPosition, setCursorPosition] = useState({ x: 0, y: 0 })
+  const [linhaMaximaY, setLinhaMaximaY] = useState(0)
+  const [linhaaaaaaaaaaY, setLinhaaaaaaaaaaY] = useState(0)
+  const [crosshairSensitivity, setCrosshairSensitivity] = useState(0.5) // Sensibilidade da mira (0.1 a 3) - padrão 0.5x
+  const previousMouseX = useRef(0) // Para calcular o delta do movimento
+  const [flickTargetHovering, setFlickTargetHovering] = useState(false)
+  const [flickTargetHit, setFlickTargetHit] = useState(false)
+  const flickDisappearTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   
   // AK Spray mode
   const [akSprayPattern, setAkSprayPattern] = useState<{ x: number; y: number }[]>([])
@@ -152,6 +160,10 @@ function App() {
           return 18 + Math.random() * 10
         case 'micro':
           return 10 + Math.random() * 8
+        case 'intensivo':
+          return 3 + Math.random() * 2
+        case 'extremo':
+          return 4 // Tamanho de um ponto (um pouco maior)
         default:
           return 50
       }
@@ -183,6 +195,10 @@ function App() {
         return 20 + Math.random() * 15
       case 'micro':
         return 10 + Math.random() * 8
+      case 'intensivo':
+        return 3 + Math.random() * 2
+      case 'extremo':
+        return 4 // Tamanho de um ponto (um pouco maior)
       default:
         return 80
     }
@@ -217,9 +233,12 @@ function App() {
   const spawnTarget = useCallback(() => {
     if (!gameStarted || gameArea.width === 0 || gameArea.height === 0) return
     if (gameMode === 'ak-spray' || gameMode === 'reflexo') return
+    
+    // No modo flick, garantir que só existe 1 alvo
+    if (gameMode === 'flick' && targets.length > 0) return
 
-    if (gameMode === 'horizontal' || (gameMode === 'normal' && normalModoLinha)) {
-      // Modo horizontal: spawnar alvos em uma linha horizontal centralizada dentro da área configurada
+    if (gameMode === 'horizontal' || gameMode === 'linha-maxima' || gameMode === 'linhaaaaaaaa' || ((gameMode === 'normal') && normalModoLinha)) {
+      // Modo horizontal/linha-maxima/linhaaaaaaaa: spawnar alvos em uma linha horizontal centralizada dentro da área configurada
       const size = getTargetSize()
       const spawnArea = getSpawnArea()
       const padding = 10
@@ -228,11 +247,21 @@ function App() {
       const availableWidth = spawnArea.width - padding * 2 - size
       const centerY = spawnArea.offsetY + spawnArea.height / 2
       
+      // Salvar Y da linha para o modo linha-maxima
+      if (gameMode === 'linha-maxima') {
+        setLinhaMaximaY(centerY)
+      }
+      
+      // Salvar Y da linha para o modo linhaaaaaaaa
+      if (gameMode === 'linhaaaaaaaa') {
+        setLinhaaaaaaaaaaY(centerY)
+      }
+      
       if (availableWidth <= 0) return
       
       let x: number
       
-      // Para modo horizontal (não normal), manter espaçamento e lógica original
+      // Para modo horizontal (não normal/linha-maxima), manter espaçamento e lógica original
       if (gameMode === 'horizontal') {
         const minSpacing = size + padding * 2
         const currentTargetCount = targets.length
@@ -285,6 +314,86 @@ function App() {
           }
           
           x = bestX
+        }
+      } else if (gameMode === 'linha-maxima') {
+        // Modo linha-maxima: spawn aleatório na linha horizontal sem sobreposição
+        let attempts = 0
+        const maxAttempts = 100
+        let foundValidPosition = false
+        
+        do {
+          // Gerar posição totalmente aleatória no eixo X
+          const randomX = spawnArea.offsetX + padding + Math.random() * availableWidth
+          x = Math.max(spawnArea.offsetX + padding, Math.min(randomX - size / 2, spawnArea.offsetX + spawnArea.width - padding - size))
+          
+          // Verificar se não está sobrepondo outros alvos
+          if (targets.length > 0) {
+            const newLeft = x
+            const newRight = x + size
+            
+            const isOverlapping = targets.some(target => {
+              const targetLeft = target.x
+              const targetRight = target.x + target.size
+              
+              // Verificar sobreposição horizontal
+              return (newLeft < targetRight && newRight > targetLeft)
+            })
+            
+            if (!isOverlapping) {
+              foundValidPosition = true
+              break
+            }
+          } else {
+            foundValidPosition = true
+            break
+          }
+          
+          attempts++
+        } while (attempts < maxAttempts)
+        
+        // Se não encontrou posição válida após muitas tentativas, não spawnar
+        if (!foundValidPosition) {
+          return
+        }
+      } else if (gameMode === 'linhaaaaaaaa') {
+        // Modo linhaaaaaaaa: spawn aleatório na linha horizontal sem sobreposição
+        let attempts = 0
+        const maxAttempts = 100
+        let foundValidPosition = false
+        
+        do {
+          // Gerar posição totalmente aleatória no eixo X
+          const randomX = spawnArea.offsetX + padding + Math.random() * availableWidth
+          x = Math.max(spawnArea.offsetX + padding, Math.min(randomX - size / 2, spawnArea.offsetX + spawnArea.width - padding - size))
+          
+          // Verificar se não está sobrepondo outros alvos
+          if (targets.length > 0) {
+            const newLeft = x
+            const newRight = x + size
+            
+            const isOverlapping = targets.some(target => {
+              const targetLeft = target.x
+              const targetRight = target.x + target.size
+              
+              // Verificar sobreposição horizontal
+              return (newLeft < targetRight && newRight > targetLeft)
+            })
+            
+            if (!isOverlapping) {
+              foundValidPosition = true
+              break
+            }
+          } else {
+            foundValidPosition = true
+            break
+          }
+          
+          attempts++
+        } while (attempts < maxAttempts)
+        
+        // Se não encontrou posição válida após muitas tentativas, não spawnar
+        if (!foundValidPosition) {
+          return
         }
       } else {
         // Modo normal com modo linha: spawn aleatório sem sobreposição
@@ -370,15 +479,18 @@ function App() {
       const x = randomCell.x + (randomCell.width - actualSize) / 2
       const y = randomCell.y + (randomCell.height - actualSize) / 2
       
+      const newTargetId = targetIdCounter
       setTargets((prev) => [
         ...prev,
         {
-          id: targetIdCounter,
+          id: newTargetId,
           x,
           y,
           size: actualSize
         }
       ])
+      // Inicializar contador de cliques para o novo alvo
+      setTargetClicks((prev) => new Map(prev).set(newTargetId, 0))
       setTargetIdCounter((prev) => prev + 1)
     } else {
       // Modos normais
@@ -393,15 +505,18 @@ function App() {
       const x = spawnArea.offsetX + padding + Math.random() * maxX
       const y = spawnArea.offsetY + padding + Math.random() * maxY
 
+      const newTargetId = targetIdCounter
       setTargets((prev) => [
         ...prev,
         {
-          id: targetIdCounter,
+          id: newTargetId,
           x,
           y,
           size
         }
       ])
+      // Inicializar contador de cliques para o novo alvo
+      setTargetClicks((prev) => new Map(prev).set(newTargetId, 0))
       setTargetIdCounter((prev) => prev + 1)
     }
   }, [gameStarted, gameArea, targetIdCounter, getSpawnArea, getTargetSize, gameMode, getGridCells, targets, normalModoLinha])
@@ -439,7 +554,7 @@ function App() {
 
   // Spawnar alvos periodicamente (modos normal e intensive)
   useEffect(() => {
-    if (!gameStarted || gameMode === 'ak-spray' || gameMode === 'reflexo' || gameMode === 'quadrado' || gameMode === 'horizontal') return
+    if (!gameStarted || gameMode === 'ak-spray' || gameMode === 'reflexo' || gameMode === 'quadrado' || gameMode === 'horizontal' || gameMode === 'flick' || gameMode === 'linha-maxima' || gameMode === 'linhaaaaaaaa') return
     
     // No modo normal com modo linha, não usar este intervalo
     if (gameMode === 'normal' && normalModoLinha) return
@@ -474,13 +589,21 @@ function App() {
     }
   }, [gameMode, horizontalModeTargets, targets.length])
 
-  // Limpar alvos quando alternar modo linha no modo normal
+  // Limpar alvos quando alternar modo linha no modo normal/linha-maxima
   useEffect(() => {
-    if (gameMode === 'normal' && normalModoLinha) {
+    if ((gameMode === 'normal' || gameMode === 'linha-maxima') && normalModoLinha) {
       setTargets([])
       setTargetClicks(new Map())
     }
   }, [normalModoLinha, gameMode])
+
+  // Limpar alvos ao iniciar modo linhaaaaaaaa
+  useEffect(() => {
+    if (gameMode === 'linhaaaaaaaa' && gameStarted) {
+      setTargets([])
+      setTargetClicks(new Map())
+    }
+  }, [gameMode, gameStarted])
 
   // Modo Reflexo: Spawn aleatório de alvos
   const spawnReflexoTarget = useCallback(() => {
@@ -577,7 +700,14 @@ function App() {
 
   // Spawnar primeiro alvo
   useEffect(() => {
-    if (gameStarted && targets.length === 0 && gameMode !== 'ak-spray' && gameMode !== 'reflexo') {
+    if (gameStarted && targets.length === 0 && gameMode !== 'ak-spray' && gameMode !== 'reflexo' && gameMode !== 'flick' && gameMode !== 'linha-maxima' && gameMode !== 'linhaaaaaaaa') {
+      spawnTarget()
+    }
+  }, [gameStarted, targets.length, spawnTarget, gameMode])
+
+  // Spawnar primeiro alvo no modo linhaaaaaaaa
+  useEffect(() => {
+    if (gameStarted && targets.length === 0 && gameMode === 'linhaaaaaaaa') {
       spawnTarget()
     }
   }, [gameStarted, targets.length, spawnTarget, gameMode])
@@ -610,6 +740,111 @@ function App() {
     return () => clearInterval(spawnInterval)
   }, [gameStarted, targets.length, spawnTarget, gameMode, maxTargets, getSpawnInterval, normalModoLinha])
 
+  // Spawnar alvos no modo linhaaaaaaaa (sempre, não depende de modo linha)
+  useEffect(() => {
+    if (!gameStarted || gameMode !== 'linhaaaaaaaa') return
+
+    const interval = getSpawnInterval()
+    const spawnInterval = setInterval(() => {
+      // No modo linhaaaaaaaa, permitir múltiplos alvos como no modo normal
+      if (targets.length >= maxTargets) return
+      spawnTarget()
+    }, interval)
+
+    return () => clearInterval(spawnInterval)
+  }, [gameStarted, targets.length, spawnTarget, gameMode, maxTargets, getSpawnInterval])
+
+  // Spawnar alvos no modo linha-maxima
+  useEffect(() => {
+    if (!gameStarted || gameMode !== 'linha-maxima') return
+
+    const interval = getSpawnInterval()
+    const spawnInterval = setInterval(() => {
+      if (targets.length >= maxTargets) return
+      spawnTarget()
+    }, interval)
+
+    return () => clearInterval(spawnInterval)
+  }, [gameStarted, targets.length, spawnTarget, gameMode, maxTargets, getSpawnInterval])
+
+  // Inicializar Y da linha no modo linha-maxima
+  useEffect(() => {
+    if (!gameStarted || gameMode !== 'linha-maxima') return
+    if (gameArea.width === 0 || gameArea.height === 0) return
+
+    const spawnArea = getSpawnArea()
+    const centerY = spawnArea.offsetY + spawnArea.height / 2
+    setLinhaMaximaY(centerY)
+    // Posicionar a mira imediatamente no centro da tela na altura correta
+    setCursorPosition({ x: gameArea.width / 2, y: centerY })
+  }, [gameStarted, gameMode, gameArea, getSpawnArea])
+
+  // Spawnar primeiro alvo no modo flick
+  useEffect(() => {
+    if (!gameStarted || gameMode !== 'flick') return
+    
+    if (targets.length === 0) {
+      spawnTarget()
+    }
+  }, [gameStarted, gameMode, targets.length, spawnTarget])
+
+  // Detectar hover no quadrado do modo flick
+  useEffect(() => {
+    if (!gameStarted || gameMode !== 'flick' || targets.length === 0) return
+
+    let isHovering = false
+
+    const handleMouseMove = (e: MouseEvent) => {
+      const target = targets[0]
+      if (!target) return
+
+      const padding = 50 // Tamanho do quadrado ao redor do alvo
+      const squareLeft = target.x - padding
+      const squareRight = target.x + target.size + padding
+      const squareTop = target.y - padding
+      const squareBottom = target.y + target.size + padding
+
+      const isInside = e.clientX >= squareLeft && e.clientX <= squareRight &&
+                       e.clientY >= squareTop && e.clientY <= squareBottom
+
+      if (isInside && !isHovering) {
+        isHovering = true
+        setFlickTargetHovering(true)
+        
+        // Alvo desaparece após 200ms (tempo limite dentro do quadrado)
+        if (flickDisappearTimeoutRef.current) {
+          clearTimeout(flickDisappearTimeoutRef.current)
+        }
+        flickDisappearTimeoutRef.current = setTimeout(() => {
+          // Alvo desapareceu sem ser clicado - conta como erro
+          setMisses((prev) => prev + 1)
+          setTargets([])
+          setFlickTargetHovering(false)
+          isHovering = false
+          // Spawnar novo alvo após um breve delay
+          setTimeout(() => {
+            spawnTarget()
+          }, 300)
+        }, 200)
+      } else if (!isInside && isHovering) {
+        isHovering = false
+        setFlickTargetHovering(false)
+        if (flickDisappearTimeoutRef.current) {
+          clearTimeout(flickDisappearTimeoutRef.current)
+          flickDisappearTimeoutRef.current = null
+        }
+      }
+    }
+
+    window.addEventListener('mousemove', handleMouseMove)
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove)
+      if (flickDisappearTimeoutRef.current) {
+        clearTimeout(flickDisappearTimeoutRef.current)
+      }
+    }
+  }, [gameStarted, gameMode, targets, spawnTarget])
+
   // Alvos só desaparecem quando acertados (removido timeout automático)
 
   // Inicializar padrão AK quando entrar no modo
@@ -641,6 +876,86 @@ function App() {
     window.addEventListener('mousemove', handleMouseMove)
     return () => window.removeEventListener('mousemove', handleMouseMove)
   }, [gameMode, gameStarted])
+
+  // Rastrear posição do mouse para a mira customizada (modo linha-maxima)
+  useEffect(() => {
+    if (gameMode !== 'linha-maxima' || linhaMaximaY === 0) return
+
+    // Posição inicial da mira
+    const initialX = window.innerWidth / 2
+    setCursorPosition({ x: initialX, y: linhaMaximaY })
+    previousMouseX.current = initialX
+
+    const handleMouseMove = (e: MouseEvent) => {
+      // Calcular o delta (movimento) do mouse
+      const deltaX = e.clientX - previousMouseX.current
+      previousMouseX.current = e.clientX
+      
+      // Aplicar sensibilidade ao movimento
+      setCursorPosition((prev) => {
+        const newX = prev.x + (deltaX * crosshairSensitivity)
+        // Limitar aos limites da tela
+        const clampedX = Math.max(0, Math.min(newX, window.innerWidth))
+        return {
+          x: clampedX,
+          y: linhaMaximaY
+        }
+      })
+    }
+
+    // Bloquear scroll enquanto estiver no modo
+    const preventScroll = (e: WheelEvent) => {
+      e.preventDefault()
+    }
+
+    window.addEventListener('mousemove', handleMouseMove, { passive: true })
+    window.addEventListener('wheel', preventScroll, { passive: false })
+    
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove)
+      window.removeEventListener('wheel', preventScroll)
+    }
+  }, [gameMode, linhaMaximaY, crosshairSensitivity])
+
+  // Rastrear posição do mouse para a mira customizada (modo linhaaaaaaaa)
+  useEffect(() => {
+    if (gameMode !== 'linhaaaaaaaa' || linhaaaaaaaaaaY === 0) return
+
+    // Posição inicial da mira
+    const initialX = window.innerWidth / 2
+    setCursorPosition({ x: initialX, y: linhaaaaaaaaaaY })
+    previousMouseX.current = initialX
+
+    const handleMouseMove = (e: MouseEvent) => {
+      // Calcular o delta (movimento) do mouse
+      const deltaX = e.clientX - previousMouseX.current
+      previousMouseX.current = e.clientX
+      
+      // Aplicar sensibilidade ao movimento
+      setCursorPosition((prev) => {
+        const newX = prev.x + (deltaX * crosshairSensitivity)
+        // Limitar aos limites da tela
+        const clampedX = Math.max(0, Math.min(newX, window.innerWidth))
+        return {
+          x: clampedX,
+          y: linhaaaaaaaaaaY
+        }
+      })
+    }
+
+    // Bloquear scroll enquanto estiver no modo
+    const preventScroll = (e: WheelEvent) => {
+      e.preventDefault()
+    }
+
+    window.addEventListener('mousemove', handleMouseMove, { passive: true })
+    window.addEventListener('wheel', preventScroll, { passive: false })
+    
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove)
+      window.removeEventListener('wheel', preventScroll)
+    }
+  }, [gameMode, linhaaaaaaaaaaY, crosshairSensitivity])
 
   // Rastrear posição do mouse para o rastro do cursor
   useEffect(() => {
@@ -804,21 +1119,96 @@ function App() {
             setTargetClicks((prev) => new Map(prev).set(targetId, newClicks))
             setScore((prev) => prev + 1) // Pontos parciais por clique
           }
+        } else if (gameMode === 'flick') {
+          // Modo flick: acertou o flickshot!
+          // Imediatamente cancelar o timeout de desaparecimento
+          if (flickDisappearTimeoutRef.current) {
+            clearTimeout(flickDisappearTimeoutRef.current)
+            flickDisappearTimeoutRef.current = null
+          }
+          
+          // Verificar se o alvo ainda existe antes de processar o acerto
+          const targetExists = targets.some(t => t.id === targetId)
+          if (!targetExists) return
+          
+          setFlickTargetHovering(false)
+          setFlickTargetHit(true)
+          setScore((prev) => prev + 10)
+          setHits((prev) => prev + 1)
+          
+          // Mostrar animação de acerto e spawnar novo alvo
+          setTimeout(() => {
+            setTargets([])
+            setFlickTargetHit(false)
+            setTimeout(() => {
+              spawnTarget()
+            }, 100)
+          }, 300)
+        } else if (gameMode === 'normal' || gameMode === 'linha-maxima' || gameMode === 'linhaaaaaaaa') {
+          // Modo normal/linha-maxima/linhaaaaaaaa: contar cliques antes de remover
+          const currentClicks = targetClicks.get(targetId) || 0
+          const newClicks = currentClicks + 1
+          
+          if (newClicks >= clicksToDestroy) {
+            // Alvo eliminado
+            setTargets((prev) => prev.filter((t) => t.id !== targetId))
+            setTargetClicks((prev) => {
+              const newMap = new Map(prev)
+              newMap.delete(targetId)
+              return newMap
+            })
+            setScore((prev) => prev + 10)
+            setHits((prev) => prev + 1)
+            // Spawnar novo alvo (sempre spawnar no modo linha-maxima e linhaaaaaaaa)
+            if (gameMode === 'linha-maxima' || gameMode === 'linhaaaaaaaa' || !normalModoLinha) {
+              spawnTarget()
+            }
+          } else {
+            // Incrementar contador de cliques
+            setTargetClicks((prev) => new Map(prev).set(targetId, newClicks))
+            setScore((prev) => prev + 1) // Pontos parciais por clique
+          }
         } else {
           // Outros modos: remover imediatamente
           setTargets((prev) => prev.filter((t) => t.id !== targetId))
           setScore((prev) => prev + 10)
           setHits((prev) => prev + 1)
-          // Não spawnar imediatamente no modo normal com modo linha
-          if (!(gameMode === 'normal' && normalModoLinha)) {
-            spawnTarget()
-          }
+          spawnTarget()
         }
       }
     }
   }
 
   const handleMissClick = useCallback((e?: React.MouseEvent) => {
+    // No modo linhaaaaaaaa, verificar colisão baseada na posição da crosshair
+    if (gameMode === 'linhaaaaaaaa' && e) {
+      // Usar a posição X da crosshair em vez da posição do mouse
+      const crosshairX = cursorPosition.x
+      const crosshairY = linhaaaaaaaaaaY
+      
+      // Verificar se a crosshair está sobre algum alvo
+      for (const target of targets) {
+        const targetLeft = target.x
+        const targetRight = target.x + target.size
+        const targetTop = target.y
+        const targetBottom = target.y + target.size
+        
+        // Verificar colisão
+        if (crosshairX >= targetLeft && crosshairX <= targetRight &&
+            crosshairY >= targetTop && crosshairY <= targetBottom) {
+          // Acertou! Chamar handleTargetClick
+          handleTargetClick(target.id)
+          return // Não registrar como miss
+        }
+      }
+      
+      // Se não acertou nenhum alvo, registrar como miss
+      if (targets.length > 0) {
+        setMisses((prev) => prev + 1)
+      }
+      return
+    }
+    
     if (targets.length > 0 && gameMode !== 'ak-spray') {
       setMisses((prev) => prev + 1)
       
@@ -868,7 +1258,7 @@ function App() {
         })
       }
     }
-  }, [targets.length, gameMode, gameArea, areaSize])
+  }, [targets, gameMode, gameArea, areaSize, cursorPosition, linhaaaaaaaaaaY])
 
   const startGame = (mode: GameMode) => {
     setGameMode(mode)
@@ -883,6 +1273,10 @@ function App() {
     setMaxTargets(1) // Começar com 1 alvo
     setTargetClicks(new Map()) // Limpar contadores de cliques
     setNormalModoLinha(false) // Resetar modo linha
+    setLinhaMaximaY(0) // Resetar Y da linha máxima
+    setLinhaaaaaaaaaaY(0) // Resetar Y do modo linhaaaaaaaa
+    setFlickTargetHovering(false) // Resetar hover do flick
+    setFlickTargetHit(false) // Resetar hit do flick
     // Resetar estatísticas do modo reflexo
     setReactionTimes([])
     setAverageReactionTime(0)
@@ -911,6 +1305,10 @@ function App() {
     setMaxTargets(1) // Resetar para 1 alvo
     setTargetClicks(new Map()) // Limpar contadores de cliques
     setNormalModoLinha(false) // Resetar modo linha
+    setLinhaMaximaY(0) // Resetar Y da linha máxima
+    setLinhaaaaaaaaaaY(0) // Resetar Y do modo linhaaaaaaaa
+    setFlickTargetHovering(false) // Resetar hover do flick
+    setFlickTargetHit(false) // Resetar hit do flick
     // Resetar estatísticas do modo reflexo
     setReactionTimes([])
     setAverageReactionTime(0)
@@ -922,6 +1320,10 @@ function App() {
     if (targetDisappearTimeoutRef.current) {
       clearTimeout(targetDisappearTimeoutRef.current)
       targetDisappearTimeoutRef.current = null
+    }
+    if (flickDisappearTimeoutRef.current) {
+      clearTimeout(flickDisappearTimeoutRef.current)
+      flickDisappearTimeoutRef.current = null
     }
   }
 
@@ -947,6 +1349,22 @@ function App() {
               <span className="button-icon">🎯</span>
               <span className="button-title">Treino Normal</span>
               <span className="button-desc">Alvos aleatórios com configurações personalizáveis</span>
+            </button>
+            <button
+              className="dashboard-button flick"
+              onClick={() => startGame('flick')}
+            >
+              <span className="button-icon">⚡</span>
+              <span className="button-title">Modo Flick</span>
+              <span className="button-desc">Igual ao modo normal - Treine seus flicks!</span>
+            </button>
+            <button
+              className="dashboard-button linhaaaaaaaa"
+              onClick={() => startGame('linhaaaaaaaa')}
+            >
+              <span className="button-icon">🎯</span>
+              <span className="button-title">Modo LINHAAAAAAAA</span>
+              <span className="button-desc">Igual ao modo normal - Configurações personalizáveis</span>
             </button>
             <button
               className="dashboard-button intensive"
@@ -996,14 +1414,6 @@ function App() {
               <span className="button-title">Modo L Fugitivo</span>
               <span className="button-desc">Alvos em formato de I que fogem quando você erra o clique</span>
             </button>
-            <button
-              className="dashboard-button horizontal"
-              onClick={() => startGame('horizontal')}
-            >
-              <span className="button-icon">➖</span>
-              <span className="button-title">Modo Horizontal</span>
-              <span className="button-desc">Alvos aparecem em uma linha horizontal</span>
-            </button>
           </div>
           {score > 0 && (
             <div className="final-stats">
@@ -1029,7 +1439,7 @@ function App() {
         <>
           <div className="game-ui">
             <div className="ui-left">
-              {(gameMode === 'normal' || gameMode === 'l' || gameMode === 'l-fugitivo' || gameMode === 'horizontal') && (
+              {(gameMode === 'normal' || gameMode === 'flick' || gameMode === 'linha-maxima' || gameMode === 'linhaaaaaaaa' || gameMode === 'l' || gameMode === 'l-fugitivo' || gameMode === 'horizontal') && (
                 <>
                   <div className="area-size-selector">
                     <span className="area-label">Área:</span>
@@ -1053,7 +1463,9 @@ function App() {
                         { key: 'medio', label: 'Médio' },
                         { key: 'pequeno', label: 'Pequeno' },
                         { key: 'muito-pequeno', label: 'M. Pequeno' },
-                        { key: 'micro', label: 'Micro' }
+                        { key: 'micro', label: 'Micro' },
+                        { key: 'intensivo', label: 'Intensivo' },
+                        { key: 'extremo', label: 'Extremo' }
                       ].map(({ key, label }) => (
                         <button
                           key={key}
@@ -1084,17 +1496,57 @@ function App() {
                       ))}
                     </div>
                   </div>
-                  {gameMode === 'normal' && (
-                    <div className="target-size-selector">
-                      <span className="area-label">Modo:</span>
-                      <div className="area-buttons">
-                        <button
-                          className={`area-button ${normalModoLinha ? 'active' : ''}`}
-                          onClick={() => setNormalModoLinha(!normalModoLinha)}
-                        >
-                          Modo linha
-                        </button>
+                  {(gameMode === 'linha-maxima' || gameMode === 'linhaaaaaaaa') && (
+                    <div className="sensitivity-selector">
+                      <span className="area-label">Sensibilidade: {crosshairSensitivity.toFixed(1)}x</span>
+                      <input
+                        type="range"
+                        min="0.1"
+                        max="3"
+                        step="0.1"
+                        value={crosshairSensitivity}
+                        onChange={(e) => setCrosshairSensitivity(parseFloat(e.target.value))}
+                        className="sensitivity-slider"
+                      />
+                      <div className="sensitivity-labels">
+                        <span>Lenta</span>
+                        <span>Normal</span>
+                        <span>Rápida</span>
                       </div>
+                    </div>
+                  )}
+                  {(gameMode === 'normal' || gameMode === 'linha-maxima' || gameMode === 'linhaaaaaaaa') && (
+                    <>
+                      <div className="target-size-selector">
+                        <span className="area-label">Modo:</span>
+                        <div className="area-buttons">
+                          <button
+                            className={`area-button ${normalModoLinha ? 'active' : ''}`}
+                            onClick={() => setNormalModoLinha(!normalModoLinha)}
+                          >
+                            Modo linha
+                          </button>
+                        </div>
+                      </div>
+                      <div className="target-size-selector">
+                        <span className="area-label">Cliques:</span>
+                        <div className="area-buttons">
+                          {[1, 2, 3, 4, 5].map((clicks) => (
+                            <button
+                              key={clicks}
+                              className={`area-button ${clicksToDestroy === clicks ? 'active' : ''}`}
+                              onClick={() => setClicksToDestroy(clicks)}
+                            >
+                              {clicks}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </>
+                  )}
+                  {gameMode === 'flick' && (
+                    <div className="special-mode-info">
+                      <span className="area-label">⚡ Modo Flickshot | Você tem 200ms dentro do quadrado!</span>
                     </div>
                   )}
                   {(gameMode === 'l' || gameMode === 'l-fugitivo') && (
@@ -1162,7 +1614,9 @@ function App() {
                         { key: 'medio', label: 'Médio' },
                         { key: 'pequeno', label: 'Pequeno' },
                         { key: 'muito-pequeno', label: 'M. Pequeno' },
-                        { key: 'micro', label: 'Micro' }
+                        { key: 'micro', label: 'Micro' },
+                        { key: 'intensivo', label: 'Intensivo' },
+                        { key: 'extremo', label: 'Extremo' }
                       ].map(({ key, label }) => (
                         <button
                           key={key}
@@ -1305,7 +1759,53 @@ function App() {
               </button>
             </div>
           </div>
-          <div className={`game-area ${gameMode === 'quadrado' ? 'quadrado-mode' : ''}`} onClick={(e) => handleMissClick(e)}>
+          <div className={`game-area ${gameMode === 'quadrado' ? 'quadrado-mode' : ''} ${gameMode === 'linha-maxima' ? 'linha-maxima-mode' : ''} ${gameMode === 'linhaaaaaaaa' ? 'linhaaaaaaaa-mode' : ''}`} onClick={(e) => handleMissClick(e)}>
+            {/* Linha de referência para modo linha-maxima */}
+            {gameMode === 'linha-maxima' && linhaMaximaY > 0 && (
+              <div
+                className="linha-maxima-reference"
+                style={{
+                  top: `${linhaMaximaY}px`
+                }}
+              />
+            )}
+            {/* Mira customizada para modo linha-maxima */}
+            {gameMode === 'linha-maxima' && linhaMaximaY > 0 && (
+              <div 
+                className="custom-crosshair"
+                style={{
+                  left: `${cursorPosition.x}px`,
+                  top: `${linhaMaximaY}px`
+                }}
+              >
+                <div className="crosshair-horizontal"></div>
+                <div className="crosshair-vertical"></div>
+                <div className="crosshair-center"></div>
+              </div>
+            )}
+            {/* Linha de referência para modo linhaaaaaaaa */}
+            {gameMode === 'linhaaaaaaaa' && linhaaaaaaaaaaY > 0 && (
+              <div
+                className="linhaaaaaaaa-reference"
+                style={{
+                  top: `${linhaaaaaaaaaaY}px`
+                }}
+              />
+            )}
+            {/* Mira customizada para modo linhaaaaaaaa */}
+            {gameMode === 'linhaaaaaaaa' && linhaaaaaaaaaaY > 0 && (
+              <div 
+                className="custom-crosshair"
+                style={{
+                  left: `${cursorPosition.x}px`,
+                  top: `${linhaaaaaaaaaaY}px`
+                }}
+              >
+                <div className="crosshair-horizontal"></div>
+                <div className="crosshair-vertical"></div>
+                <div className="crosshair-center"></div>
+              </div>
+            )}
             {/* Rastro do cursor */}
             {cursorTrailEnabled && cursorTrail.length > 0 && (
               <svg 
@@ -1373,7 +1873,19 @@ function App() {
                 ))}
               </div>
             )}
-            {(gameMode === 'intensive' || gameMode === 'reflexo' || ((gameMode === 'normal' || gameMode === 'l' || gameMode === 'l-fugitivo' || gameMode === 'horizontal') && areaSize < 100)) && (
+            {/* Quadrado ao redor do alvo no modo flick */}
+            {gameMode === 'flick' && targets.length > 0 && (
+              <div
+                className={`flick-square ${flickTargetHovering ? 'flick-square-hovering' : ''}`}
+                style={{
+                  left: `${targets[0].x - 50}px`,
+                  top: `${targets[0].y - 50}px`,
+                  width: `${targets[0].size + 100}px`,
+                  height: `${targets[0].size + 100}px`
+                }}
+              />
+            )}
+            {(gameMode === 'intensive' || gameMode === 'reflexo' || ((gameMode === 'normal' || gameMode === 'flick' || gameMode === 'linha-maxima' || gameMode === 'linhaaaaaaaa' || gameMode === 'l' || gameMode === 'l-fugitivo' || gameMode === 'horizontal') && areaSize < 100)) && (
               <div
                 className="spawn-area-indicator"
                 style={{
@@ -1417,18 +1929,25 @@ function App() {
               return (
                 <div
                   key={target.id}
-                  className={`target ${gameMode === 'intensive' ? 'special-target' : ''} ${gameMode === 'ak-spray' ? (target.id === currentSprayIndex ? 'ak-target-active' : 'ak-target') : ''} ${gameMode === 'quadrado' ? 'square-target' : ''} ${gameMode === 'l' || gameMode === 'l-fugitivo' ? 'l-target' : ''} ${gameMode === 'l-fugitivo' && hitTargets.has(target.id) ? 'target-hit-animation' : ''} ${gameMode === 'horizontal' ? 'horizontal-target' : ''}`}
+                  className={`target ${gameMode === 'intensive' ? 'special-target' : ''} ${gameMode === 'ak-spray' ? (target.id === currentSprayIndex ? 'ak-target-active' : 'ak-target') : ''} ${gameMode === 'quadrado' ? 'square-target' : ''} ${gameMode === 'l' || gameMode === 'l-fugitivo' ? 'l-target' : ''} ${gameMode === 'l-fugitivo' && hitTargets.has(target.id) ? 'target-hit-animation' : ''} ${gameMode === 'horizontal' ? 'horizontal-target' : ''} ${targetSize === 'extremo' ? 'extreme-target' : ''} ${gameMode === 'flick' && flickTargetHit ? 'flick-target-hit' : ''}`}
                   style={{
                     left: `${target.x}px`,
                     top: `${target.y}px`,
                     width: `${target.size}px`,
                     height: `${target.size}px`,
-                    pointerEvents: gameMode === 'ak-spray' && target.id !== currentSprayIndex ? 'none' : (gameMode === 'l' || gameMode === 'l-fugitivo') ? 'none' : 'auto'
+                    pointerEvents: gameMode === 'ak-spray' && target.id !== currentSprayIndex ? 'none' : (gameMode === 'l' || gameMode === 'l-fugitivo' || gameMode === 'linhaaaaaaaa') ? 'none' : 'auto',
+                    zIndex: gameMode === 'flick' ? 20 : (gameMode === 'linha-maxima' || gameMode === 'linhaaaaaaaa') ? 100 : undefined,
+                    cursor: (gameMode === 'linha-maxima' || gameMode === 'linhaaaaaaaa') ? 'none' : undefined
                   }}
-                  onClick={(gameMode === 'l' || gameMode === 'l-fugitivo') ? undefined : (e) => {
+                  onClick={(gameMode === 'l' || gameMode === 'l-fugitivo' || gameMode === 'flick' || gameMode === 'linha-maxima' || gameMode === 'linhaaaaaaaa') ? undefined : (e) => {
                     e.stopPropagation()
                     handleTargetClick(target.id)
                   }}
+                  onMouseDown={(gameMode === 'flick' || gameMode === 'linha-maxima') ? (e) => {
+                    e.stopPropagation()
+                    e.preventDefault()
+                    handleTargetClick(target.id)
+                  } : undefined}
                 >
                   {(gameMode === 'l' || gameMode === 'l-fugitivo') && (
                     <span 
@@ -1444,7 +1963,7 @@ function App() {
                       I
                     </span>
                   )}
-                  {gameMode === 'horizontal' && clicksToDestroy > 1 && (
+                  {(gameMode === 'horizontal' || gameMode === 'normal' || gameMode === 'linha-maxima' || gameMode === 'linhaaaaaaaa') && clicksToDestroy > 1 && (
                     <span 
                       className="horizontal-target-clicks"
                       style={{

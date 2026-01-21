@@ -293,6 +293,193 @@
   background: #000000;
 }
 
+.game-area.linha-maxima-mode {
+  cursor: none !important;
+  overflow: hidden;
+}
+
+.game-area.linha-maxima-mode * {
+  cursor: none !important;
+}
+
+.game-area.linha-maxima-mode .target {
+  z-index: 50 !important;
+  pointer-events: auto !important;
+  cursor: none !important;
+}
+
+/* Linha de referência para modo linha-maxima */
+.linha-maxima-reference {
+  position: fixed;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(to bottom, 
+    transparent, 
+    rgba(138, 43, 226, 0.4) 50%, 
+    transparent);
+  border-top: 1px dashed rgba(138, 43, 226, 0.6);
+  border-bottom: 1px dashed rgba(138, 43, 226, 0.6);
+  pointer-events: none;
+  z-index: 5;
+  box-shadow: 
+    0 0 15px rgba(138, 43, 226, 0.4),
+    0 0 30px rgba(138, 43, 226, 0.2);
+}
+
+/* Garantir que o cursor padrão seja ocultado no modo linhaaaaaaaa */
+.game-area.linhaaaaaaaa-mode {
+  cursor: none !important;
+  overflow: hidden;
+}
+
+.game-area.linhaaaaaaaa-mode * {
+  cursor: none !important;
+}
+
+.game-area.linhaaaaaaaa-mode .target {
+  z-index: 100 !important;
+  pointer-events: none !important;
+  cursor: none !important;
+  position: absolute !important;
+}
+
+
+/* Garantir que todos os filhos dos alvos não bloqueiem cliques */
+.game-area.linhaaaaaaaa-mode .target > * {
+  pointer-events: none !important;
+}
+
+/* Garantir que o hover funcione no modo linhaaaaaaaa */
+.game-area.linhaaaaaaaa-mode .target:hover {
+  transform: scale(1.1) !important;
+  box-shadow: 
+    0 0 0 3px rgba(255, 107, 107, 0.7),
+    0 0 20px 5px rgba(255, 107, 107, 0.4),
+    0 0 40px 10px rgba(255, 107, 107, 0.2) !important;
+}
+
+/* Linha de referência para modo linhaaaaaaaa */
+.linhaaaaaaaa-reference {
+  position: fixed;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(to bottom, 
+    transparent, 
+    rgba(255, 105, 180, 0.4) 50%, 
+    transparent);
+  border-top: 1px dashed rgba(255, 105, 180, 0.6);
+  border-bottom: 1px dashed rgba(255, 105, 180, 0.6);
+  pointer-events: none !important;
+  z-index: 1;
+  box-shadow: 
+    0 0 15px rgba(255, 105, 180, 0.4),
+    0 0 30px rgba(255, 105, 180, 0.2);
+}
+
+/* Mira customizada para modo linha-maxima e linhaaaaaaaa */
+.custom-crosshair {
+  position: fixed !important;
+  pointer-events: none !important;
+  z-index: 150 !important;
+  transform: translate(-50%, -50%);
+}
+
+.custom-crosshair,
+.custom-crosshair *,
+.custom-crosshair *::before,
+.custom-crosshair *::after {
+  pointer-events: none !important;
+}
+
+.crosshair-horizontal {
+  position: absolute;
+  width: 20px;
+  height: 2px;
+  background: #00ff00;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  box-shadow: 
+    0 0 2px rgba(0, 0, 0, 0.8),
+    0 0 4px rgba(0, 255, 0, 0.6);
+}
+
+.crosshair-horizontal::before {
+  content: '';
+  position: absolute;
+  width: 6px;
+  height: 2px;
+  background: #00ff00;
+  left: -8px;
+  box-shadow: 
+    0 0 2px rgba(0, 0, 0, 0.8),
+    0 0 4px rgba(0, 255, 0, 0.6);
+}
+
+.crosshair-horizontal::after {
+  content: '';
+  position: absolute;
+  width: 6px;
+  height: 2px;
+  background: #00ff00;
+  right: -8px;
+  box-shadow: 
+    0 0 2px rgba(0, 0, 0, 0.8),
+    0 0 4px rgba(0, 255, 0, 0.6);
+}
+
+.crosshair-vertical {
+  position: absolute;
+  width: 2px;
+  height: 20px;
+  background: #00ff00;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  box-shadow: 
+    0 0 2px rgba(0, 0, 0, 0.8),
+    0 0 4px rgba(0, 255, 0, 0.6);
+}
+
+.crosshair-vertical::before {
+  content: '';
+  position: absolute;
+  width: 2px;
+  height: 6px;
+  background: #00ff00;
+  top: -8px;
+  box-shadow: 
+    0 0 2px rgba(0, 0, 0, 0.8),
+    0 0 4px rgba(0, 255, 0, 0.6);
+}
+
+.crosshair-vertical::after {
+  content: '';
+  position: absolute;
+  width: 2px;
+  height: 6px;
+  background: #00ff00;
+  bottom: -8px;
+  box-shadow: 
+    0 0 2px rgba(0, 0, 0, 0.8),
+    0 0 4px rgba(0, 255, 0, 0.6);
+}
+
+.crosshair-center {
+  position: absolute;
+  width: 2px;
+  height: 2px;
+  background: #00ff00;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  box-shadow: 
+    0 0 2px rgba(0, 0, 0, 0.8),
+    0 0 4px rgba(0, 255, 0, 0.8);
+}
+
 .spawn-area-indicator {
   position: absolute;
   border: 3px dashed rgba(255, 255, 255, 0.5);
@@ -301,6 +488,69 @@
   z-index: 1;
   animation: borderPulse 2s ease-in-out infinite;
   box-shadow: inset 0 0 20px rgba(255, 255, 255, 0.1);
+}
+
+/* Quadrado do modo flick */
+.flick-square {
+  position: absolute;
+  border: 3px solid rgba(255, 193, 7, 0.6);
+  background: rgba(255, 193, 7, 0.05);
+  pointer-events: none;
+  z-index: 9;
+  box-shadow: 
+    0 0 10px rgba(255, 193, 7, 0.4),
+    inset 0 0 20px rgba(255, 193, 7, 0.1);
+  transition: all 0.1s ease;
+}
+
+.flick-square-hovering {
+  border-color: rgba(255, 69, 0, 0.9);
+  background: rgba(255, 69, 0, 0.1);
+  box-shadow: 
+    0 0 20px rgba(255, 69, 0, 0.8),
+    inset 0 0 30px rgba(255, 69, 0, 0.2);
+  animation: flickWarning 0.2s ease-in-out;
+}
+
+@keyframes flickWarning {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.05);
+  }
+}
+
+/* Animação de acerto no modo flick */
+.flick-target-hit {
+  animation: flickHitAnimation 0.3s ease-out !important;
+  background: radial-gradient(circle, #00ff00 0%, #4ecdc4 50%, #00ff00 100%) !important;
+  border-color: #00ff00 !important;
+  box-shadow: 
+    0 0 20px rgba(0, 255, 0, 1),
+    0 0 40px rgba(0, 255, 0, 0.8),
+    0 0 60px rgba(0, 255, 0, 0.6) !important;
+}
+
+@keyframes flickHitAnimation {
+  0% {
+    transform: scale(1);
+    box-shadow: 
+      0 0 20px rgba(0, 255, 0, 1),
+      0 0 40px rgba(0, 255, 0, 0.8),
+      0 0 60px rgba(0, 255, 0, 0.6);
+  }
+  50% {
+    transform: scale(1.5);
+    box-shadow: 
+      0 0 40px rgba(0, 255, 0, 1),
+      0 0 80px rgba(0, 255, 0, 1),
+      0 0 120px rgba(0, 255, 0, 0.8);
+  }
+  100% {
+    transform: scale(1.2);
+    opacity: 0;
+  }
 }
 
 
@@ -327,7 +577,8 @@
   cursor: crosshair;
   transition: transform 0.1s ease;
   animation: pulse 1.5s ease-in-out infinite;
-  z-index: 10;
+  z-index: 50 !important;
+  pointer-events: auto !important;
 }
 
 .square-target {
@@ -345,6 +596,37 @@
   box-shadow: 
     0 0 8px rgba(255, 0, 0, 1),
     0 3px 12px rgba(0, 0, 0, 0.5) !important;
+}
+
+.extreme-target {
+  background: #ff0000 !important;
+  border: none !important;
+  box-shadow: 
+    0 0 3px rgba(255, 0, 0, 1),
+    0 0 6px rgba(255, 0, 0, 0.8) !important;
+  animation: extremePulse 1s ease-in-out infinite !important;
+  border-radius: 50% !important;
+}
+
+.extreme-target:hover {
+  transform: scale(1.3) !important;
+  background: #ff3333 !important;
+  box-shadow: 
+    0 0 5px rgba(255, 0, 0, 1),
+    0 0 10px rgba(255, 0, 0, 1) !important;
+}
+
+@keyframes extremePulse {
+  0%, 100% {
+    box-shadow: 
+      0 0 3px rgba(255, 0, 0, 1),
+      0 0 6px rgba(255, 0, 0, 0.8);
+  }
+  50% {
+    box-shadow: 
+      0 0 5px rgba(255, 0, 0, 1),
+      0 0 10px rgba(255, 0, 0, 1);
+  }
 }
 
 .grid-container {
@@ -584,6 +866,33 @@
   background: rgba(78, 205, 196, 0.2);
 }
 
+.dashboard-button.flick {
+  border-color: rgba(255, 193, 7, 0.5);
+}
+
+.dashboard-button.flick:hover {
+  border-color: #ffc107;
+  background: rgba(255, 193, 7, 0.2);
+}
+
+.dashboard-button.linha-maxima {
+  border-color: rgba(138, 43, 226, 0.5);
+}
+
+.dashboard-button.linha-maxima:hover {
+  border-color: #8a2be2;
+  background: rgba(138, 43, 226, 0.2);
+}
+
+.dashboard-button.linhaaaaaaaa {
+  border-color: rgba(255, 105, 180, 0.5);
+}
+
+.dashboard-button.linhaaaaaaaa:hover {
+  border-color: #ff69b4;
+  background: rgba(255, 105, 180, 0.2);
+}
+
 .dashboard-button.intensive {
   border-color: rgba(255, 215, 0, 0.5);
 }
@@ -771,7 +1080,8 @@
 
   .area-size-selector,
   .target-size-selector,
-  .spawn-speed-selector {
+  .spawn-speed-selector,
+  .sensitivity-selector {
     justify-content: center;
     flex-wrap: wrap;
     width: 100%;
@@ -825,4 +1135,78 @@
   .button-desc {
     font-size: 0.9rem;
   }
+}
+
+/* Controle de Sensibilidade */
+.sensitivity-selector {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 1rem 0;
+  padding: 1rem;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.sensitivity-slider {
+  width: 100%;
+  max-width: 300px;
+  height: 6px;
+  -webkit-appearance: none;
+  appearance: none;
+  background: linear-gradient(to right, #4ECDC4, #FF6B6B);
+  border-radius: 5px;
+  outline: none;
+  cursor: pointer;
+}
+
+.sensitivity-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #fff;
+  cursor: pointer;
+  box-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
+  transition: all 0.2s ease;
+}
+
+.sensitivity-slider::-webkit-slider-thumb:hover {
+  transform: scale(1.2);
+  box-shadow: 0 0 15px rgba(255, 255, 255, 0.8);
+}
+
+.sensitivity-slider::-moz-range-thumb {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #fff;
+  cursor: pointer;
+  border: none;
+  box-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
+  transition: all 0.2s ease;
+}
+
+.sensitivity-slider::-moz-range-thumb:hover {
+  transform: scale(1.2);
+  box-shadow: 0 0 15px rgba(255, 255, 255, 0.8);
+}
+
+.sensitivity-labels {
+  display: flex;
+  justify-content: space-between;
+  width: 100%;
+  max-width: 300px;
+  font-size: 0.8rem;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.area-label {
+  font-weight: 600;
+  color: #fff;
+  margin-bottom: 0.5rem;
+  font-size: 1rem;
 }
